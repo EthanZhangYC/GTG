@@ -7,3 +7,4 @@ generated_datasets/
 trained_models
 samples/
 wandb/
+results

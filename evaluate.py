@@ -9,7 +9,7 @@ from params_proto.neo_hyper import Sweep
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="ant")
+    parser.add_argument("--task", type=str, default="our")
     parser.add_argument("--horizon", type=int, default=64)
     parser.add_argument("--ctx_len", type=int, default=32)
     parser.add_argument("--alpha", type=float, default=0.8)
@@ -20,12 +20,16 @@ if __name__ == '__main__':
     parser.add_argument("--k", type=int, default=50)
     parser.add_argument("--eps", type=float, default=0.05)
     parser.add_argument("--n_traj", type=int, default=1000)
+    
+    parser.add_argument("--resume", type=str, default="results/evaluate")
 
     args = parser.parse_args()
-    args.data_path = f'generated_datasets/{args.task}_frac{args.frac}_sigma{args.sigma}/{args.n_traj}x{args.horizon}_k{args.k}_eps{args.eps}_train.p'
-    RUN.prefix = f"trained_models/{args.task}_frac{args.frac}_sigma{args.sigma}/{args.n_traj}x{args.horizon}_k{args.k}_eps{args.eps}/seed{args.seed}/"
+    # args.data_path = f'generated_datasets/{args.task}_frac{args.frac}_sigma{args.sigma}/{args.n_traj}x{args.horizon}_k{args.k}_eps{args.eps}_train.p'
+    # RUN.prefix = f"trained_models/{args.task}_frac{args.frac}_sigma{args.sigma}/{args.n_traj}x{args.horizon}_k{args.k}_eps{args.eps}/seed{args.seed}/"
+    RUN.prefix = "results/evaluate"
     
     logger.print(RUN.prefix, color='green')
     jaynes.config("local")
-    thunk = instr(evaluate, **vars(args))
+    # thunk = instr(evaluate, **vars(args))
+    thunk = evaluate(**vars(args))
     jaynes.run(thunk)

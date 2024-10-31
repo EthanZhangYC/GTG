@@ -7,8 +7,10 @@ import os
 import gym
 # from config.locomotion_config import Config
 from diffuser.utils.arrays import to_torch, to_np, to_device
-from diffuser.utils.des_bench import DesignBenchFunctionWrapper
-from diffuser.datasets.d4rl import suppress_output
+# from diffuser.utils.des_bench import DesignBenchFunctionWrapper
+# from diffuser.datasets.d4rl import suppress_output
+import pdb
+import matplotlib.pyplot as plt
 
 
 def evaluate(**deps):
@@ -34,51 +36,52 @@ def evaluate(**deps):
 
     Config.device = 'cuda'
     
-    loadpath = os.path.join(logger.prefix, 'checkpoint')
+    # loadpath = os.path.join(logger.prefix, 'checkpoint')
     
-    if Config.save_checkpoints:
-        loadpath = os.path.join(loadpath, f'state_{Config.n_train_steps}.pt')
-    else:
-        loadpath = os.path.join(loadpath, 'state.pt')
+    # if Config.save_checkpoints:
+    #     loadpath = os.path.join(loadpath, f'state_{Config.n_train_steps}.pt')
+    # else:
+    #     loadpath = os.path.join(loadpath, 'state.pt')
     
-    state_dict = torch.load(loadpath, map_location=Config.device)
+    # loadpath = deps['resume']
+    # state_dict = torch.load(loadpath, map_location=Config.device)
     
-    proxy_loadpath = os.path.join(logger.prefix, 'proxy_checkpoint')
+    # proxy_loadpath = os.path.join(logger.prefix, 'proxy_checkpoint')
     
-    if Config.save_checkpoints:
-        proxy_loadpath = os.path.join(proxy_loadpath, f'state_{Config.proxy_n_train_steps}.pt')
-    else:
-        proxy_loadpath = os.path.join(proxy_loadpath, 'state.pt')
+    # if Config.save_checkpoints:
+    #     proxy_loadpath = os.path.join(proxy_loadpath, f'state_{Config.proxy_n_train_steps}.pt')
+    # else:
+    #     proxy_loadpath = os.path.join(proxy_loadpath, 'state.pt')
     
-    proxy_state_dict = torch.load(proxy_loadpath, map_location=Config.device)
+    # proxy_state_dict = torch.load(proxy_loadpath, map_location=Config.device)
 
     # Load configs
     torch.backends.cudnn.benchmark = True
     utils.set_seed(Config.seed)
 
-    dataset_config = utils.Config(
-        Config.loader,
-        savepath='dataset_config.pkl',
-        # env=Config.dataset,
-        horizon=Config.horizon,
-        data_path=Config.data_path,
-        context_length=Config.context_length,
-        regret=Config.regret,
-        # normalizer=Config.normalizer,
-        # preprocess_fns=Config.preprocess_fns,
-        # use_padding=Config.use_padding,
-        # max_path_length=Config.max_path_length,
-        include_returns=Config.include_returns,
-        # returns_scale=Config.returns_scale,
-    )
+    # dataset_config = utils.Config(
+    #     Config.loader,
+    #     savepath='dataset_config.pkl',
+    #     # env=Config.dataset,
+    #     horizon=Config.horizon,
+    #     data_path=Config.data_path,
+    #     context_length=Config.context_length,
+    #     regret=Config.regret,
+    #     # normalizer=Config.normalizer,
+    #     # preprocess_fns=Config.preprocess_fns,
+    #     # use_padding=Config.use_padding,
+    #     # max_path_length=Config.max_path_length,
+    #     include_returns=Config.include_returns,
+    #     # returns_scale=Config.returns_scale,
+    # )
 
-    proxy_dataset_config = utils.Config(
-        Config.proxy_loader,
-        dataset=Config.dataset,
-        frac=Config.frac,
-        sigma=Config.sigma,
-        savepath='proxy_dataset_config.pkl',
-    )
+    # proxy_dataset_config = utils.Config(
+    #     Config.proxy_loader,
+    #     dataset=Config.dataset,
+    #     frac=Config.frac,
+    #     sigma=Config.sigma,
+    #     savepath='proxy_dataset_config.pkl',
+    # )
 
     # render_config = utils.Config(
     #     Config.renderer,
@@ -86,12 +89,15 @@ def evaluate(**deps):
     #     env=Config.dataset,
     # )
 
-    dataset = dataset_config()
-    proxy_dataset = proxy_dataset_config()
-    # renderer = render_config()
-    renderer = Config.renderer
-    observation_dim = dataset.observation_dim
-    action_dim = dataset.action_dim
+    # dataset = dataset_config()
+    # proxy_dataset = proxy_dataset_config()
+    # # renderer = render_config()
+    # renderer = Config.renderer
+    # observation_dim = dataset.observation_dim
+    # action_dim = dataset.action_dim
+    observation_dim = 2
+    action_dim = 0
+    Config.horizon = 200
 
     if Config.diffusion == 'models.GaussianInvDynDiffusion':
         transition_dim = observation_dim
@@ -165,15 +171,16 @@ def evaluate(**deps):
     proxy_model = proxy_model_config()
     diffusion = diffusion_config(model)
     
+    dataset=proxy_dataset=renderer=None
     trainer = trainer_config(diffusion, proxy_model, dataset, proxy_dataset, renderer)
     logger.print(utils.report_parameters(model), color='green')
     
-    trainer.step = state_dict['step']
-    trainer.model.load_state_dict(state_dict['model'])
-    trainer.ema_model.load_state_dict(state_dict['ema'])
+    # trainer.step = state_dict['step']
+    # trainer.model.load_state_dict(state_dict['model'])
+    # trainer.ema_model.load_state_dict(state_dict['ema'])
 
-    trainer.proxy_step = proxy_state_dict['step']
-    trainer.proxy_model.load_state_dict(proxy_state_dict['model'])
+    # trainer.proxy_step = proxy_state_dict['step']
+    # trainer.proxy_model.load_state_dict(proxy_state_dict['model'])
     
     device = Config.device
     context_length = Config.ctx_len
@@ -181,50 +188,122 @@ def evaluate(**deps):
     num_queries = 128
     num_eval = 1
     
-    contexts = []
-    queries = []
-    for e in range(num_eval):        
-        batch = next(trainer.dataloader)
         
-        # context conditioning
-        conditions = {i: to_torch(batch.trajectories[:, i+Config.horizon-context_length], device=device) for i in range(context_length)}
-        conditions["ctx_len"] = to_torch(np.ones(trainer.batch_size,), device=device) * context_length
+    model_dir_list=[
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_10000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_20000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_30000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_40000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_50000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_70000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_90000.pt",
+        "/home/yichen/GTG/results/1028_ori_len200_bs1024_inputxy/checkpoint/state_110000.pt",
+    ] 
+    filename='1029mtl_gtg_bs1024_inputxy_len200.png'
         
+    model_dir_list=[
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lr2e4/checkpoint/state_10000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lr2e4/checkpoint/state_20000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lr2e4/checkpoint/state_40000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lr2e4/checkpoint/state_80000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lr2e4/checkpoint/state_140000.pt",
+    ] 
+    filename='1030mtl_gtg_bs1024_inputxy_len200_lr2e4.png'
+
+    model_dir_list=[
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_10000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_20000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_40000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_80000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_160000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_withcond_lossrecon_lr2e4/checkpoint/state_260000.pt",
+    ] 
+    filename='1031mtl_gtg_bs1024_inputxy_len200_withcond_lossrecon_lr2e4.png'
+    
+    model_dir_list=[
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_10000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_20000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_40000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_80000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_160000.pt",
+        "/home/yichen/GTG/results/1029_ori_len200_bs1024_inputxy_lossrecon/checkpoint/state_280000.pt",
+    ] 
+    filename='1031mtl_gtg_bs1024_inputxy_len200_lossrecon.png'
+
+    
+    # contexts = []
+    # queries = []
+    # for e in range(num_eval):        
+    #     batch = next(trainer.dataloader)
+
+    
+    batch = next(trainer.dataloader)
+    Gen_traj = []
+    for model_dir in model_dir_list:   
+        print(model_dir)
+        state_dict = torch.load(model_dir, map_location=Config.device)
+        trainer.step = state_dict['step']
+        trainer.model.load_state_dict(state_dict['model'])
+        trainer.ema_model.load_state_dict(state_dict['ema'])
+    
         # classifier-free guidance
         returns = torch.ones(1, ).to(device=device).unsqueeze(0) * Config.alpha
         returns = returns.repeat(trainer.batch_size, 1)
         
-        samples, time = trainer.ema_model.conditional_sample(conditions, values=None, returns=returns)
+        # # # context conditioning
+        # conditions = {i: to_torch(batch.trajectories[:, i+Config.horizon-context_length], device=device) for i in range(context_length)}
+        # conditions["ctx_len"] = to_torch(np.ones(trainer.batch_size,), device=device) * context_length
+        # samples, time = trainer.ema_model.conditional_sample(conditions, values=None, returns=returns)
+        conditions = None
+        samples, time = trainer.ema_model.unconditional_sample(conditions, values=None, returns=returns)
+        
         samples = samples[..., :observation_dim]
-        print(samples.shape)
+        samples = samples[0].cpu().numpy()
+        
+        lat_min,lat_max = (18.249901, 55.975593)
+        lon_min,lon_max = (-122.3315333, 126.998528)
+        samples[:,0] = samples[:,0] * (lat_max-lat_min) + lat_min
+        samples[:,1] = samples[:,1] * (lon_max-lon_min) + lon_min
+        Gen_traj.append(samples)
 
-        queries.append(samples[:, context_length:])
-        contexts.append(samples[:, :context_length])
+    fig = plt.figure(figsize=(12,12))
+    for i in range(len(Gen_traj)):
+        traj=Gen_traj[i]
+        ax1 = fig.add_subplot(331+i)  
+        ax1.plot(traj[:,0],traj[:,1],color='blue',alpha=0.1)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.show()
+    exit()
 
-    queries = torch.cat(queries, dim=0).reshape(-1, observation_dim)
-    contexts = torch.cat(contexts, dim=0).reshape(-1, observation_dim).cpu().numpy()
-    print(queries.shape, contexts.shape)
+    #     queries.append(samples[:, context_length:])
+    #     contexts.append(samples[:, :context_length])
+        
+
+    # queries = torch.cat(queries, dim=0).reshape(-1, observation_dim)
+    # contexts = torch.cat(contexts, dim=0).reshape(-1, observation_dim).cpu().numpy()
+    # print(queries.shape, contexts.shape)
     
-    queries_norm = trainer.proxy_dataset.normalizer.normalize(trainer.dataset.normalizer.unnormalize(queries.cpu())).to(trainer.device)
-    queries_proxy_score = trainer.proxy_model(queries_norm).flatten()
+    # queries_norm = trainer.proxy_dataset.normalizer.normalize(trainer.dataset.normalizer.unnormalize(queries.cpu())).to(trainer.device)
+    # queries_proxy_score = trainer.proxy_model(queries_norm).flatten()
 
-    # filtering
-    queries = queries[torch.argsort(queries_proxy_score)[-num_queries:]].cpu()
-    queries = dataset.normalizer.unnormalize(queries).numpy()
+    # # filtering
+    # queries = queries[torch.argsort(queries_proxy_score)[-num_queries:]].cpu()
+    # queries = dataset.normalizer.unnormalize(queries).numpy()
             
-    func = DesignBenchFunctionWrapper(deps["task"], normalise=True)
-    if deps["task"].startswith("tfbind"):
-        queries = func.task.to_integers(queries.reshape(num_queries, -1, 3))
-    else:
-        queries = queries.reshape(num_queries, -1)
-    y = func.task.predict(queries)
-    y_norm = (y - func.min) / (func.max - func.min)
+    # func = DesignBenchFunctionWrapper(deps["task"], normalise=True)
+    # if deps["task"].startswith("tfbind"):
+    #     queries = func.task.to_integers(queries.reshape(num_queries, -1, 3))
+    # else:
+    #     queries = queries.reshape(num_queries, -1)
+    # y = func.task.predict(queries)
+    # y_norm = (y - func.min) / (func.max - func.min)
     
-    logger.print(f"max_ep_reward: {np.max(y)}, median_ep_reward: {np.median(y)}, mean_ep_reward: {np.mean(y)},", color='green')
-    logger.log_metrics_summary({f"max_ep_reward": np.max(y), "median_ep_reward": np.median(y), "mean_ep_reward": np.mean(y)})
+    # logger.print(f"max_ep_reward: {np.max(y)}, median_ep_reward: {np.median(y)}, mean_ep_reward: {np.mean(y)},", color='green')
+    # logger.log_metrics_summary({f"max_ep_reward": np.max(y), "median_ep_reward": np.median(y), "mean_ep_reward": np.mean(y)})
     
-    logger.print(f"nmax_ep_reward: {np.max(y_norm)}, nmedian_ep_reward: {np.median(y_norm)}, nmean_ep_reward: {np.mean(y_norm)},", color='green')
-    logger.log_metrics_summary({f"nmax_ep_reward": np.max(y_norm), "nmedian_ep_reward": np.median(y_norm), "nmean_ep_reward": np.mean(y_norm)})
+    # logger.print(f"nmax_ep_reward: {np.max(y_norm)}, nmedian_ep_reward: {np.median(y_norm)}, nmean_ep_reward: {np.mean(y_norm)},", color='green')
+    # logger.log_metrics_summary({f"nmax_ep_reward": np.max(y_norm), "nmedian_ep_reward": np.median(y_norm), "nmean_ep_reward": np.mean(y_norm)})
     
-    np.savez_compressed(os.path.join(logger.prefix, f'performance_{Config.n_train_steps}_{trainer.batch_size}x{Config.horizon - context_length}_alpha{Config.alpha}'), y=y, y_norm=y_norm, time=time)
-    np.savez_compressed(os.path.join(logger.prefix, f'samples_{Config.n_train_steps}_{trainer.batch_size}x{Config.horizon - context_length}_alpha{Config.alpha}'), queries=queries)
+    # np.savez_compressed(os.path.join(logger.prefix, f'performance_{Config.n_train_steps}_{trainer.batch_size}x{Config.horizon - context_length}_alpha{Config.alpha}'), y=y, y_norm=y_norm, time=time)
+    # np.savez_compressed(os.path.join(logger.prefix, f'samples_{Config.n_train_steps}_{trainer.batch_size}x{Config.horizon - context_length}_alpha{Config.alpha}'), queries=queries)

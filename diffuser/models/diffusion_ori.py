@@ -195,51 +195,6 @@ class GaussianDiffusion(nn.Module):
         shape = (batch_size, horizon, self.transition_dim)
 
         return self.p_sample_loop(shape, cond, returns, values=values, *args, **kwargs)
-
-
-
-    @torch.no_grad()
-    def p_sample_loop_uncond(self, shape, cond=None, returns=None, verbose=True, return_diffusion=False, values=None):
-        device = self.betas.device
-
-        batch_size = shape[0]
-        x = 0.5*torch.randn(shape, device=device)
-        # x = apply_conditioning(x, cond, values=values)
-
-        if return_diffusion: diffusion = [x]
-
-        # progress = utils.Progress(self.n_timesteps) if verbose else utils.Silent()
-        # for i in reversed(range(0, self.n_timesteps)):
-        progress = utils.Progress(self.n_sample_timesteps) if verbose else utils.Silent()
-        start_time = time.time()
-        for i in reversed(range(0, self.n_sample_timesteps)):
-            timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x = self.p_sample(x, cond, timesteps, returns)
-            # x = apply_conditioning(x, cond, values=values)
-
-            progress.update({'t': i})
-
-            if return_diffusion: diffusion.append(x)
-        end_time = time.time() - start_time
-        progress.close()
-        if return_diffusion:
-            return x, torch.stack(diffusion, dim=1)
-        else:
-            return x, end_time
-        
-    @torch.no_grad()
-    def unconditional_sample(self, cond=None, returns=None, horizon=None, values=None, *args, **kwargs):
-        '''
-            conditions : [ (time, state), ... ]
-        '''
-        device = self.betas.device
-        # batch_size = len(cond["ctx_len"])
-        # # batch_size = len(cond[0])
-        batch_size = 8
-        horizon = horizon or self.horizon
-        shape = (batch_size, horizon, self.transition_dim)
-
-        return self.p_sample_loop_uncond(shape, cond, returns, values=values, *args, **kwargs)
     
     @torch.no_grad()
     def back_and_forth_sample(self, x_start, cond, returns=None, verbose=True, return_diffusion=False, values=None):
@@ -336,8 +291,6 @@ class GaussianDiffusion(nn.Module):
         return sample
 
     def p_losses(self, x_start, cond, t, returns=None):
-        x_start = x_start.permute(0,2,1) # b,t,h
-        
         noise = torch.randn_like(x_start)
 
         if self.predict_epsilon:
@@ -359,6 +312,7 @@ class GaussianDiffusion(nn.Module):
 
         if not self.predict_epsilon:
             x_recon = apply_conditioning(x_recon, cond)
+
         assert noise.shape == x_recon.shape
 
         if self.predict_epsilon:
@@ -366,7 +320,7 @@ class GaussianDiffusion(nn.Module):
         else:
             loss, info = self.loss_fn(x_recon, x_start)
 
-        return loss, info, x_recon
+        return loss, info
 
     def loss(self, x, cond, returns=None):
         batch_size = len(x)
@@ -375,8 +329,6 @@ class GaussianDiffusion(nn.Module):
 
     def forward(self, cond, *args, **kwargs):
         return self.conditional_sample(cond=cond, *args, **kwargs)
-
-
 
 class GaussianInvDynDiffusion(nn.Module):
     def __init__(self, model, horizon, observation_dim, action_dim, n_timesteps=1000,

@@ -90,6 +90,24 @@ def cosine_beta_schedule(timesteps, s=0.008, dtype=torch.float32):
     betas_clipped = np.clip(betas, a_min=0, a_max=0.999)
     return torch.tensor(betas_clipped, dtype=dtype)
 
+def apply_conditioning_ori(x, conditions, values=None):
+    ctx_len = conditions["ctx_len"].to(dtype=torch.long).flatten()
+    # del conditions["ctx_len"]
+    
+    for t, val in conditions.items():
+        if t != "ctx_len":
+            # for i in range(x.shape[0]):
+            #     if t <= ctx_len[i]:
+            #         x[i, t, :] = val[i].clone()
+            idx = torch.LongTensor([t]).to(device=x.device) <= ctx_len
+            x[idx, t, :] = val[idx].clone()
+        # x[:, t, :] = val.clone()
+    # if values is not None:
+    #     x[:, -values.shape[1]:, -values.shape[2]:] = values.clone()
+    if values is not None:
+        x[:, -values.shape[1]:, -1] = values.clone()
+    return x
+
 def apply_conditioning(x, conditions, values=None):
     ctx_len = conditions["ctx_len"].to(dtype=torch.long).flatten()
     # del conditions["ctx_len"]
